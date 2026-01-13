@@ -1,0 +1,80 @@
+# Code Walkthrough: `diya.py`
+
+This document provides a technical walkthrough of the `diya.py` implementation. It explains the core components, logic flow, and specific algorithms used for hand pattern recognition and visual effects.
+
+## 1. Overview
+The script combines **OpenCV** (video capture), **MediaPipe** (hand tracking), and **Pygame** (rendering) to create an augmented reality experience. The core loop captures a frame, processes it for hand landmarks, detects specific gestures, and renders the virtual Diya and Matchstick responses on top of the video feed.
+
+## 2. Key Components
+
+### A. Imports & Initialization
+- **MediaPipe Hands**: Initialized with `max_num_hands=1` to focus interaction on a single hand (intended for the user's left hand to light the match).
+- **Pygame**: Initializes a fullscreen display.
+
+### B. `HandPattern` & `PatternRecognizer`
+This class is the "brain" of the interaction. It translates raw landmark coordinates into semantic actions.
+
+- **`detect(landmarks)`**:
+  - **Logic**: It calculates distances between fingertips and knuckles (MCP joints) or between specific fingertips.
+  - **Gestures**:
+    - `match_hold`: Index finger extended, others curled (or less dominant).
+    - `ignite`: Thumb and Middle finger are close (< 0.05 distance units) while Index is open. This simulates the "snap" or friction to light a match.
+    - `extinguish`: Thumb and Index finger pinch (< 0.05 distance units). Used to snuff out the flame.
+    - `shield`: All fingers open. Used to protect the flame (visual effect).
+
+### C. Visual Systems (`Particle`, `FireSystem`)
+- **Particle System**: A custom implementation to render fire.
+- **`Particle` Class**:
+  - Handles position `(x, y)`, velocity `(vx, vy)`, life, and size.
+  - **Physics**: Particles move upward (`vy` is negative) and shrink over time.
+  - **Color**: Transitions from Yellow/White -> Orange -> Dark Red based on remaining life.
+- **`FireSystem` Class**: Manages a list of particles, updating and drawing them each frame.
+
+### D. `Matchstick` Class
+Represents the virtual matchstick held by the user.
+
+- **Tracking**:
+  - Anchors to the **Index Finger** (`landmarks[5]` base to `landmarks[8]` tip).
+  - **Stabilization**: Uses a `SmoothingFilter` (weighted average) on positions to prevent jittering from hand tremors or detection noise.
+  - **Orientation**: Calculates `math.atan2` between the index base and tip to align the stick visuals with the finger.
+- **State**:
+  - `is_lit`: Boolean flag triggered by the `IGNITE` pattern.
+  - `burnt_amount`: Increases over time when lit, changing the head color from Red to Black.
+- **Drawing**: Renders the stick (wood color), the head (changing color), and calls the `FireSystem` if lit.
+
+### E. `Diya` Class
+Represents the stationary oil lamp on the screen.
+
+- **Design**:
+  - Draws a traditional clay lamp using multiple `pygame.draw.ellipse` and `polygon` calls to create depth/perspective.
+  - Contains a "Wick" position where the flame sits.
+- **Interaction**:
+  - **Ignition**: Checks `check_ignition()`. If the *lit matchstick head* is within 60 pixels of the wick, the Diya lights up.
+  - **Extinguishing**: Checks `handle_interaction()`. If the user performs the `EXTINGUISH` (pinch) gesture near the wick, the flame dies.
+  - **Glow**: Renders a translucent pulsing circle when lit to simulate light.
+
+## 3. Main Loop (`main`)
+
+1. **Capture**: Reads `cap.read()` from the webcam.
+2. **Process**:
+   - Flips the frame horizontally (mirror view).
+   - Converts BGR to RGB.
+   - Passes it to `hands.process()`.
+3. **Render Background**: Draws a radial gradient over the screen (dark room ambience).
+4. **Update Logic**:
+   - **Hand Detection**: Iterates through landmarks.
+   - **Hand Filtering**: Specifically looks for the "Right" MediaPipe label (which corresponds to the User's physical **Left** hand due to mirroring).
+   - **Update Matchstick**: Updates position and checks for ignition gestures.
+   - **Update Diya**: Checks if the match lit it or if a hand is extinguishing it.
+5. **Draw**:
+   - Renders Matchstick -> Diya -> Particles.
+   - Draws the **Stop Button** for easy exit.
+6. **Refresh**: `pygame.display.flip()` updates the screen.
+
+## 4. Notable Algorithms
+- **Smoothing**: `val = old * (1-alpha) + new * alpha`. Simple low-pass filter to make the matchstick movement feel weighty and stable.
+- **Geometry**: Heavy use of `math.cos`, `math.sin`, and `math.atan2` to align the 2D sprites with the 3D hand landmarks projected onto the 2D screen.
+
+## 5. Usage Tips handled in Code
+- **Lighting**: The code specifically demands the Index finger be "open" while the Thumb and Middle interact to light the match, distinguishing it from a general fist or random movement.
+
