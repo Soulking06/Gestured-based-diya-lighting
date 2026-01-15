@@ -407,7 +407,18 @@ def main():
     pygame.display.set_caption("Virtual Diya - Realism")
     
     cap = cv2.VideoCapture(0)
-    if not cap.isOpened(): cap = cv2.VideoCapture(0, cv2.CAP_AVFOUNDATION)
+    # If default backend failed, try platform-specific backends
+    if not cap.isOpened():
+        import platform
+        sys_os = platform.system()
+        if sys_os == "Windows":
+             cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+        elif sys_os == "Darwin":
+             cap = cv2.VideoCapture(0, cv2.CAP_AVFOUNDATION)
+        # Linux typically works with default (V4L2) or we could add it explicitly if needed
+    
+    if not cap.isOpened():
+        print("Error: Could not open camera.")
 
     clock = pygame.time.Clock()
     
